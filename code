@@ -1,0 +1,67 @@
+import cv2
+import mediapipe as mp
+import pyautogui
+
+# Initialize MediaPipe Face Mesh
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
+
+# Get screen size
+screen_w, screen_h = pyautogui.size()
+
+# Initialize webcam
+cam = cv2.VideoCapture(0)
+
+while True:
+    _, frame = cam.read()
+    frame = cv2.flip(frame, 1)  # Flip the frame horizontally
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Convert the frame to RGB
+    results = face_mesh.process(rgb_frame)  # Process the frame with MediaPipe Face Mesh
+    landmark_points = results.multi_face_landmarks  # Get the landmark points
+    frame_h, frame_w, _ = frame.shape
+
+    if landmark_points:
+        landmarks = landmark_points[0].landmark
+
+        # Iris landmarks for left and right eye
+        left_eye_iris = landmarks[474]  # Center of the left iris
+        right_eye_iris = landmarks[469]  # Center of the right iris
+
+        # Map the iris positions to the frame
+        left_iris_x = int(left_eye_iris.x * frame_w)
+        left_iris_y = int(left_eye_iris.y * frame_h)
+        right_iris_x = int(right_eye_iris.x * frame_w)
+        right_iris_y = int(right_eye_iris.y * frame_h)
+
+        # Draw circles on the iris centers
+        cv2.circle(frame, (left_iris_x, left_iris_y), 3, (0, 255, 0), -1)
+        cv2.circle(frame, (right_iris_x, right_iris_y), 3, (0, 255, 0), -1)
+
+        # Calculate the average position of the irises for tracking
+        avg_iris_x = (left_eye_iris.x + right_eye_iris.x) / 2
+        avg_iris_y = (left_eye_iris.y + right_eye_iris.y) / 2
+
+        # Map the average iris position to the screen
+        screen_x = screen_w * avg_iris_x
+        screen_y = screen_h * avg_iris_y
+        pyautogui.moveTo(screen_x, screen_y)
+
+        # Detecting eye blinking by checking the distance between eyelid landmarks
+        left_eye_top = landmarks[159]
+        left_eye_bottom = landmarks[145]
+        left_eye_top_y = int(left_eye_top.y * frame_h)
+        left_eye_bottom_y = int(left_eye_bottom.y * frame_h)
+
+        cv2.circle(frame, (int(left_eye_top.x * frame_w), left_eye_top_y), 3, (0, 255, 255), -1)
+        cv2.circle(frame, (int(left_eye_bottom.x * frame_w), left_eye_bottom_y), 3, (0, 255, 255), -1)
+
+        if (left_eye_bottom_y - left_eye_top_y) < 5:
+            pyautogui.click()
+            pyautogui.sleep(1)
+
+    cv2.imshow('Eye Controlled Mouse', frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cam.release()
+cv2.destroyAllWindows()
